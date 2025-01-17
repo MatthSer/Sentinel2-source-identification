@@ -32,7 +32,7 @@ def main(refence, test, crop_size):
     # Display histograms
     # Merged
     plt.hist(list_corr, bins='auto', alpha=0.7, edgecolor='black', label=r"$\rho(P^r_i, P^p_j):i \neq j$")
-    plt.hist(list_corr_ij, bins='auto', alpha=0.7, edgecolor='black', label=r"$\rho(P^r_i, P^p_j):x_i=x_j$")
+    plt.hist(list_corr_ij, bins='auto', alpha=0.7, edgecolor='black', label=r"$\rho(P^r_i, P^p_j):i=j$")
     plt.title(f'p_value = {p_value:.2e}')
     plt.legend(loc='upper right')
     plt.savefig('./outputs/histo.png')
