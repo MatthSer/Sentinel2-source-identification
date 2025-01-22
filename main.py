@@ -11,7 +11,6 @@ ROOT = os.path.dirname(os.path.realpath(__file__))
 
 
 def main(refence, test, crop_size):
-
     # Compute profils
     prnu_ref = get_profil(refence)
     prnu_test = get_profil(test)
@@ -29,13 +28,27 @@ def main(refence, test, crop_size):
     if not os.path.exists('outputs'):
         os.mkdir('outputs')
 
-    # Display histograms
-    # Merged
-    plt.hist(list_corr, bins='auto', alpha=0.7, edgecolor='black', label=r"$\rho(P^r_i, P^p_j):i \neq j$")
-    plt.hist(list_corr_ij, bins='auto', alpha=0.7, edgecolor='black', label=r"$\rho(P^r_i, P^p_j):i=j$")
+    # Set up number of bins
+    num_bin = 50
+    bin_lims = np.linspace(-1, 1, num_bin + 1)
+    bin_centers = 0.5 * (bin_lims[:-1] + bin_lims[1:])
+    bin_widths = bin_lims[1:] - bin_lims[:-1]
+
+    # Computing histograms
+    hist1, _ = np.histogram(list_corr, bins=bin_lims)
+    hist2, _ = np.histogram(list_corr_ij, bins=bin_lims)
+
+    # Normalizing
+    hist1b = hist1 / np.max(hist1)
+    hist2b = hist2 / np.max(hist2)
+
+    # Plot
+    plt.bar(bin_centers, hist1b, width=bin_widths, align='center', alpha=0.7, edgecolor='black', label=r"$\rho(P^r_i, P^p_j):i \neq j$")
+    plt.bar(bin_centers, hist2b, width=bin_widths, align='center', alpha=0.7, edgecolor='black', label=r"$\rho(P^r_i, P^p_j):i=j$")
     plt.title(f'p_value = {p_value:.2e}')
     plt.legend(loc='upper right')
     plt.savefig('./outputs/histo.png')
+
     exit(0)
 
 
@@ -45,7 +58,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-r", "--reference", type=str, required=True)
     parser.add_argument("-t", "--test", type=str, required=True)
-    parser.add_argument("-s", "--crop_size", type=int, default=200, required=False)
+    parser.add_argument("-s", "--crop_size", type=int, default=20, required=False)
 
     args = parser.parse_args()
     main(args.reference, args.test, args.crop_size)
