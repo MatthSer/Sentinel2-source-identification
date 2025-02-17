@@ -3,6 +3,7 @@ import iio
 import numpy as np
 
 from utils.utils import *
+import matplotlib.pyplot as plt
 
 # if you need to access a file next to the source code, use the variable ROOT
 # for example:
