@@ -44,7 +44,7 @@ def main(refence, test, crop_size):
 
     # Plot
     plt.bar(bin_centers, hist1b, width=bin_widths, align='center', alpha=0.7, edgecolor='black', label=r"$\rho(P^r_i, P^p_j):i \neq j$")
-    plt.bar(bin_centers, hist2b, width=bin_widths, align='center', alpha=0.7, edgecolor='black', label=r"$\rho(P^r_i, P^p_j):i=j$")
+    plt.bar(bin_centers, hist2b, width=bin_widths, align='center', alpha=0.7, edgecolor='black', label=r"$\rho(P^r_i, P^p_i):i=1,...K$")
     plt.title(f'p_value = {p_value:.2e}')
     plt.legend(loc='upper right')
     plt.savefig('./outputs/histo.png')
