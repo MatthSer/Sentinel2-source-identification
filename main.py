@@ -11,10 +11,11 @@ import matplotlib.pyplot as plt
 ROOT = os.path.dirname(os.path.realpath(__file__))
 
 
-def main(refence, test, crop_size):
-    # Compute profils
-    s1 = get_profil(refence)
-    s2 = get_profil(test)
+def main(reference, test, crop_size, filter):
+
+    # Compute profiles
+    s1 = get_profil(reference, filter)
+    s2 = get_profil(test, filter)
 
     # Crop
     s1 = s1
@@ -76,4 +77,4 @@ if __name__ == "__main__":
     parser.add_argument("-f", "--filter", type=str, default='rank', required=False)
 
     args = parser.parse_args()
-    main(args.reference, args.test, args.crop_size)
+    main(args.reference, args.test, args.crop_size, args.filter)

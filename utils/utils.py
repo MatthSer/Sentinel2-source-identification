@@ -47,6 +47,50 @@ def k_mean(img, k=2):
     return filtered_img
 
 
+@njit(fastmath=True)
+def get_rank(center_val, window):
+    count = 0
+    for i in prange(window.shape[0]):
+        for j in prange(window.shape[1]):
+            if window[i, j] < center_val:
+                count += 1
+    return count
+
+
+@njit(parallel=True, fastmath=True)
+def rank_filter(img, patch_size=3):
+    pad = patch_size // 2
+    H, W = img.shape
+    ranked_img = np.zeros_like(img)
+
+    # Manual reflect padding
+    for i in prange(H):
+        for j in prange(W):
+            # Create the patch manually
+            window = np.empty((patch_size, patch_size), dtype=img.dtype)
+            for dy in range(-pad, pad + 1):
+                for dx in range(-pad, pad + 1):
+                    y = i + dy
+                    x = j + dx
+
+                    # Reflect padding logic
+                    if y < 0:
+                        y = -y
+                    elif y >= H:
+                        y = 2 * H - y - 2
+
+                    if x < 0:
+                        x = -x
+                    elif x >= W:
+                        x = 2 * W - x - 2
+
+                    window[dy + pad, dx + pad] = img[y, x]
+
+            ranked_img[i, j] = get_rank(img[i, j], window)
+
+    return ranked_img
+
+
 def list_img_path(input_dir, sensor_ids, band_ids):
     list_path = []
     for dir in os.listdir(input_dir):
@@ -197,7 +241,7 @@ def get_profil_crop(img, size_x, size_y):
     return profil, x_start
 
 
-def get_profil(path):
+def get_profil(path, filter):
     """
     Reads an image file, applies filtering, and extracts a profile.
 
@@ -217,8 +261,11 @@ def get_profil(path):
             if img is None or img.size == 0:
                 raise ValueError(f"Empty or corrupted image: {path}")
 
-            # Apply k-mean filtering
-            filtered_img = k_mean(img, k=2)
+            # Apply filtering
+            if filter == '2-means':
+                filtered_img = k_mean(img, k=2)
+            elif filter == 'rank':
+                filtered_img = rank_filter(img)
 
             # Ensure slicing is valid
             if filtered_img.shape[0] <= 20:
