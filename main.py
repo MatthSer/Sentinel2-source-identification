@@ -13,12 +13,25 @@ ROOT = os.path.dirname(os.path.realpath(__file__))
 
 def main(refence, test, crop_size):
     # Compute profils
-    prnu_ref = get_profil(refence)
-    prnu_test = get_profil(test)
+    s1 = get_profil(refence)
+    s2 = get_profil(test)
+
+    # Crop
+    s1 = s1
+    s2 = s2[1000:2000]
 
     # Compare signals
-    p_value, list_corr, list_corr_ij = prnu_similarity_profil(prnu_ref, prnu_test, crop_size)
+    if len(s1) == len(s2):
+        p_value, list_corr, list_corr_ij = prnu_similarity_profil(s1, s2, crop_size)
+    else:
+        results = align_and_crop(s1, s2, normalize=True, use_fft=True, return_corr=False)
+        s1_crop = results['s1_crop']
+        s2_crop = results['s2_crop']
+        offset = results['lag']
+        p_value, list_corr, list_corr_ij = prnu_similarity_profil(s1_crop, s2_crop, crop_size)
+
     print(f'p_value: {p_value}')
+    print(f'best offset: {offset}')
 
     if p_value < 1e-6:
         print(f'Images come from the same source')
@@ -60,6 +73,7 @@ if __name__ == "__main__":
     parser.add_argument("-r", "--reference", type=str, required=True)
     parser.add_argument("-t", "--test", type=str, required=True)
     parser.add_argument("-s", "--crop_size", type=int, default=20, required=False)
+    parser.add_argument("-f", "--filter", type=str, default='rank', required=False)
 
     args = parser.parse_args()
     main(args.reference, args.test, args.crop_size)

@@ -8,9 +8,9 @@ from scipy import signal
 from scipy import stats
 
 from numba import njit, prange
+
+
 # import vpv
-
-
 
 
 def normalize(arr):
@@ -314,22 +314,86 @@ def prnu_similarity_profil(prnu, residual, crop_size):
     return ks_pvalue, list_corr, list_corr_i_j
 
 
-def get_witness_corr_distribution(prnu, residual, crop_size):
-    sample_size = len(prnu)
-    signal_size = len(residual)
+def align_and_crop(sig1, sig2, normalize=True, use_fft=True, return_corr=False):
+    """
+    Align two 1D signals of potentially different lengths by maximizing
+    their cross-correlation, then return the overlapping (cropped) region
+    after alignment.
 
-    if sample_size != signal_size:
-        raise ValueError(f'Sample size {sample_size} must be the same as PRNU size {signal_size}')
+    Parameters
+    ----------
+    sig1, sig2 : array-like
+        1D input signals.
+    normalize : bool, default True
+        If True, apply z-score normalization (mean=0, std=1) to make correlation
+        insensitive to scale or DC offset.
+    use_fft : bool, default True
+        If True and SciPy is available, use FFT-based cross-correlation (faster).
+    return_corr : bool, default False
+        If True, also return the correlation curve and lags array.
 
-    # Precompute valid crop indices
-    indices = np.arange(0, sample_size - crop_size, crop_size)
+    Returns
+    -------
+    result : dict
+        {
+          'lag': int,                # optimal shift (sig2 relative to sig1)
+          's1_crop': np.ndarray,     # cropped portion of sig1 after alignment
+          's2_crop': np.ndarray,     # cropped portion of sig2 after alignment
+          'idx1': (start1, end1),    # indices used from sig1 (slice [start1:end1])
+          'idx2': (start2, end2),    # indices used from sig2 (slice [start2:end2])
+          'corr_peak': float,        # correlation value at optimal lag
+          # Optional if return_corr=True:
+          'corr': np.ndarray,
+          'lags':  np.ndarray,
+        }
+    """
+    s1 = np.asarray(sig1, dtype=float)
+    s2 = np.asarray(sig2, dtype=float)
 
-    # Compute correlations using optimized Numba function
-    list_corr, list_corr_i_j = compute_correlations(prnu, residual, indices, crop_size)
+    # Optional z-score normalization
+    if normalize:
+        def zscore(x):
+            std = np.std(x)
+            return (x - np.mean(x)) / std if std > 0 else x - np.mean(x)
 
-    # TODO: get back to original
-    return np.concatenate((list_corr, list_corr_i_j))
-    # return list_corr_i_j
+        s1n, s2n = zscore(s1), zscore(s2)
+    else:
+        s1n, s2n = s1, s2
+
+    # Cross-correlation (full mode)
+    try:
+        from scipy.signal import correlate
+        method = 'fft' if use_fft else 'direct'
+        corr = correlate(s1n, s2n, mode='full', method=method)
+    except Exception:
+        # Fallback without SciPy (O(n^2))
+        corr = np.correlate(s1n, s2n, mode='full')
+
+    lags = np.arange(-len(s2n) + 1, len(s1n))
+    best_idx = int(np.argmax(corr))
+    best_lag = int(lags[best_idx])
+    corr_peak = float(corr[best_idx])
+
+    # Compute overlap indices after alignment
+    start1 = max(best_lag, 0)
+    start2 = max(-best_lag, 0)
+    L = max(0, min(len(s1) - start1, len(s2) - start2))
+
+    s1_crop = s1[start1:start1 + L]
+    s2_crop = s2[start2:start2 + L]
+
+    result = {
+        'lag': best_lag,
+        's1_crop': s1_crop,
+        's2_crop': s2_crop,
+        'idx1': (start1, start1 + L),
+        'idx2': (start2, start2 + L),
+        'corr_peak': corr_peak,
+    }
+    if return_corr:
+        result['corr'] = corr
+        result['lags'] = lags
+    return result
 
 
 def get_sensor_id(path):
@@ -338,103 +402,3 @@ def get_sensor_id(path):
 
 def get_band_id(path):
     return path.split('/')[-1].split('.')[0].split('_')[-1]
-
-
-def get_pvalue(distribution, value):
-    stats, pvalue = scipy.stats.ttest_1samp(distribution, popmean=value, alternative='two-sided')
-    return pvalue
-
-
-def patch_source_eval(prnu_profil, residual, size_x, size_y, interval_size):
-    """
-    Evaluates a patch source by comparing a PRNU profile with a cropped residual.
-
-    Args:
-        prnu_profil (numpy.ndarray): Reference PRNU profile.
-        residual (numpy.ndarray): Residual image data.
-        size_x (int): Width of the cropped profile.
-        size_y (int): Height of the cropped profile.
-        interval_size (int): Interval size for similarity profiling.
-
-    Returns:
-        tuple: (Minimum p-value, position of min p-value, start position of cropped profile)
-    """
-    if len(prnu_profil) < size_x:
-        raise ValueError("PRNU profile length is too short for the given crop size.")
-
-    np.random.seed(1)  # Ensure reproducibility
-
-    # Extract test profile from residual
-    crop_profil_test, start = get_profil_crop(residual, size_x, size_y)
-
-    # Pre-allocate NumPy array for p-values
-    num_samples = len(prnu_profil) - size_x
-    pvalues = np.empty(num_samples, dtype=np.float64)
-
-    # Compute similarity p-values
-    for i in range(num_samples):
-        sample_ref = prnu_profil[i:i + size_x]
-        pvalues[i], _, _ = prnu_similarity_profil(sample_ref, crop_profil_test, interval_size)
-
-    # Compute minimum p-value and its position
-    min_pvalue = np.min(pvalues)
-    min_pos = np.argmin(pvalues)
-
-    return min_pvalue, min_pos, start
-
-
-def patch_source_eval_v1(prnu_profil, witness_distribution, residual, size_x, size_y):
-    """
-    Evaluates a patch source using witness correlation distribution.
-
-    Args:
-        prnu_profil (numpy.ndarray): Reference PRNU profile.
-        profil_witness (numpy.ndarray): Witness profile for correlation distribution.
-        residual (numpy.ndarray): Residual image data.
-        size_x (int): Width of the cropped profile.
-        size_y (int): Height of the cropped profile.
-
-    Returns:
-        tuple: (P-value, position of max correlation, start position of cropped profile)
-    """
-    if len(prnu_profil) < size_x:
-        raise ValueError("PRNU profile length is too short for the given crop size.")
-
-    np.random.seed(1)  # Ensure reproducibility
-
-    # # Get witness correlation distribution
-    # witness_distribution = get_witness_corr_distribution(prnu_profil, profil_witness, size_x)
-
-    # Extract residual profile
-    residual_sample, start = get_profil_crop(residual, size_x, size_y)
-
-    # Precompute mean and standard deviation for residual sample
-    mean_residual = np.mean(residual_sample)
-    std_residual = np.std(residual_sample)
-
-    # Number of comparisons
-    num_samples = len(prnu_profil) - size_x
-
-    # Pre-allocate NumPy array for correlation coefficients
-    corrs = np.empty(num_samples, dtype=np.float64)
-
-    # Compute correlation for each sample
-    for i in range(num_samples):
-        sample_ref = prnu_profil[i:i + size_x]
-
-        # Compute mean and standard deviation for the PRNU sample
-        mean_prnu = np.mean(sample_ref)
-        std_prnu = np.std(sample_ref)
-
-        # Compute Pearson correlation manually (faster than np.corrcoef in loops)
-        corrs[i] = np.sum((sample_ref - mean_prnu) * (residual_sample - mean_residual)) / (
-                size_x * std_prnu * std_residual)
-
-    # Compute max correlation and its position
-    max_corr = np.max(corrs)
-    max_pos = np.argmax(corrs)
-
-    # Get p-value
-    pvalue = get_pvalue(witness_distribution, max_corr)
-
-    return pvalue, max_pos, start
