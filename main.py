@@ -11,15 +11,11 @@ from utils.utils import *
 ROOT = os.path.dirname(os.path.realpath(__file__))
 
 
-def main(reference, test, crop_size, filter):
+def main(reference, test, crop_size, filter, crop=False):
 
     # Compute profiles
-    s1 = get_profil(reference, filter)
-    s2 = get_profil(test, filter)
-
-    # Crop
-    s1 = s1
-    s2 = s2[1000:2000]
+    s1, _, _ = get_profil(reference, filter)
+    s2, x_start, y_start = get_profil(test, filter, crop)
 
     # Compare signals
     if len(s1) == len(s2):
@@ -57,6 +53,7 @@ if __name__ == "__main__":
     parser.add_argument("-t", "--test", type=str, required=True)
     parser.add_argument("-s", "--crop_size", type=int, default=20, required=False)
     parser.add_argument("-f", "--filter", type=str, default='rank', required=False)
+    parser.add_argument("-c", "--crop", type=bool, default=False, required=False)
 
     args = parser.parse_args()
     main(args.reference, args.test, args.crop_size, args.filter)

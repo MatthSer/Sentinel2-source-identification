@@ -255,7 +255,7 @@ def get_profil_crop(img, size_x, size_y):
     return profil, x_start
 
 
-def get_profil(path, filter):
+def get_profil(path, filter, crop_size=1000):
     """
     Reads an image file, applies filtering, and extracts a profile.
 
@@ -275,6 +275,11 @@ def get_profil(path, filter):
             if img is None or img.size == 0:
                 raise ValueError(f"Empty or corrupted image: {path}")
 
+            if crop_size:
+                img, x_start, y_start = random_square_crop(img, crop_size)
+            else:
+                x_start, y_start = 0, 0
+
             # Apply filtering
             if filter == '2-means':
                 filtered_img = k_mean(img, k=2)
@@ -288,7 +293,7 @@ def get_profil(path, filter):
             # Compute mean profile along axis 0
             profil = np.mean(filtered_img, axis=0)[10:-10]
 
-        return profil
+        return profil, x_start, y_start
 
     except rasterio.errors.RasterioIOError:
         raise ValueError(f"Error reading raster file: {path}")
@@ -527,6 +532,42 @@ def save_histo_rank(list_missaligned, list_aligned, pvalue):
     plt.title(f'p_value = {pvalue:.2e}')
     plt.legend(loc='best')
     plt.savefig('./outputs/histo_rank.png')
+
+
+def random_square_crop(image, crop_size, seed=None):
+    """
+    Crop a random square region from an image.
+
+    Parameters
+    ----------
+    image : np.ndarray
+        Input image, shape (H, W) or (H, W, C).
+    crop_size : int
+        Side length of the square crop.
+    seed : int, optional
+        Random seed for reproducibility.
+
+    Returns
+    -------
+    crop : np.ndarray
+        Cropped square image of shape (crop_size, crop_size) or (crop_size, crop_size, C).
+    x_start : int
+        Starting x index of the crop.
+    y_start : int
+        Starting y index of the crop.
+    """
+    H, W = image.shape[:2]
+
+    if crop_size > H or crop_size > W:
+        raise ValueError(f"crop_size ({crop_size}) must be smaller than both image dimensions ({H}x{W})")
+
+    rng = np.random.default_rng(seed)
+    x_start = rng.integers(0, W - crop_size + 1)
+    y_start = rng.integers(0, H - crop_size + 1)
+
+    crop = image[y_start:y_start + crop_size, x_start:x_start + crop_size]
+
+    return crop, x_start, y_start
 
 
 def get_sensor_id(path):
