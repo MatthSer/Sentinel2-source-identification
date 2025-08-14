@@ -476,6 +476,7 @@ def align_and_crop(sig1, sig2, normalize=True, use_fft=True, return_corr=False):
 
 
 def save_histo_gauss(list_missaligned, list_aligned, pvalue):
+    plt.figure()
     # Set up number of bins
     num_bin = 50
     bin_lims = np.linspace(-1, 1, num_bin + 1)
@@ -501,6 +502,7 @@ def save_histo_gauss(list_missaligned, list_aligned, pvalue):
 
 
 def save_histo_rank(list_missaligned, list_aligned, pvalue):
+    plt.figure()
     aligned = np.ones(len(list_aligned))
     misaligned = np.zeros(len(list_missaligned))
 
@@ -522,6 +524,7 @@ def save_histo_rank(list_missaligned, list_aligned, pvalue):
 
     plt.bar(bin_centers, hist1, width=bin_widths, align='center', alpha=0.7, edgecolor='black',
             label=r"$\rho(P^r_i, P^p_j): i = j$")
+    plt.title(f'p_value = {pvalue:.2e}')
     plt.legend(loc='best')
     plt.savefig('./outputs/histo_rank.png')
 
