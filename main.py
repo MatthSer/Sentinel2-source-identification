@@ -3,7 +3,7 @@ import iio
 import numpy as np
 
 from utils.utils import *
-import matplotlib.pyplot as plt
+
 
 # if you need to access a file next to the source code, use the variable ROOT
 # for example:
@@ -23,18 +23,19 @@ def main(reference, test, crop_size, filter):
 
     # Compare signals
     if len(s1) == len(s2):
-        p_value, list_corr, list_corr_ij = prnu_similarity_profil(s1, s2, crop_size)
+        p_value_gauss, p_value_rank, list_corr, list_corr_ij = prnu_similarity_profil(s1, s2, crop_size)
     else:
         results = align_and_crop(s1, s2, normalize=True, use_fft=True, return_corr=False)
         s1_crop = results['s1_crop']
         s2_crop = results['s2_crop']
         offset = results['lag']
-        p_value, list_corr, list_corr_ij = prnu_similarity_profil(s1_crop, s2_crop, crop_size)
+        p_value_gauss, p_value_rank, list_corr, list_corr_ij = prnu_similarity_profil(s1_crop, s2_crop, crop_size)
 
-    print(f'p_value: {p_value}')
+    print(f'p_value Gauss test: {p_value_gauss}')
+    print(f'p_value Rank test: {p_value_rank}')
     print(f'best offset: {offset}')
 
-    if p_value < 1e-6:
+    if p_value_gauss < 1e-6:
         print(f'Images come from the same source')
     else:
         print(f'Images come from a different source')
@@ -43,27 +44,8 @@ def main(reference, test, crop_size, filter):
     if not os.path.exists('outputs'):
         os.mkdir('outputs')
 
-    # Set up number of bins
-    num_bin = 50
-    bin_lims = np.linspace(-1, 1, num_bin + 1)
-    bin_centers = 0.5 * (bin_lims[:-1] + bin_lims[1:])
-    bin_widths = bin_lims[1:] - bin_lims[:-1]
-
-    # Computing histograms
-    hist1, _ = np.histogram(list_corr, bins=bin_lims)
-    hist2, _ = np.histogram(list_corr_ij, bins=bin_lims)
-
-    # Normalizing
-    hist1b = hist1 / np.max(hist1)
-    hist2b = hist2 / np.max(hist2)
-
-    # Plot
-    plt.bar(bin_centers, hist1b, width=bin_widths, align='center', alpha=0.7, edgecolor='black', label=r"$\rho(P^r_i, P^p_j):i \neq j$")
-    plt.bar(bin_centers, hist2b, width=bin_widths, align='center', alpha=0.7, edgecolor='black', label=r"$\rho(P^r_i, P^p_i):i=1,...K$")
-    plt.title(f'p_value = {p_value:.2e}')
-    plt.legend(loc='upper right')
-    plt.savefig('./outputs/histo.png')
-
+    save_histo_gauss(list_corr, list_corr_ij, p_value_gauss)
+    save_histo_rank(list_corr, list_corr_ij, p_value_rank)
     exit(0)
 
 

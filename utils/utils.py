@@ -2,7 +2,8 @@ import os
 
 import numpy as np
 import rasterio
-import scipy.stats
+
+import matplotlib.pyplot as plt
 
 from scipy import signal
 from scipy import stats
@@ -55,6 +56,19 @@ def get_rank(center_val, window):
             if window[i, j] < center_val:
                 count += 1
     return count
+
+
+@njit
+def rank_1d(arr):
+    n = len(arr)
+    ranks = np.empty(n, dtype=np.int64)
+    for i in range(n):
+        rank = 0
+        for j in range(n):
+            if arr[j] < arr[i]:
+                rank += 1
+        ranks[i] = rank
+    return ranks
 
 
 @njit(parallel=True, fastmath=True)
@@ -342,6 +356,23 @@ def compute_correlations(prnu, residual, indices, crop_size):
     return list_corr[:index_corr], list_corr_i_j[:index_corr_i_j]
 
 
+def ks_rank_test(list_corr, list_corr_i_j):
+    aligned = np.ones(len(list_corr_i_j))
+    misaligned = np.zeros(len(list_corr))
+
+    all_values = np.concatenate((list_corr, list_corr_i_j))
+    index_aligned = np.concatenate((misaligned, aligned))
+    rank_corr = rank_1d(all_values)
+
+    rank_aligned = rank_corr[np.where(index_aligned)] / len(all_values)
+    # rank_misaligned = rank_corr[np.where(index_aligned == 0)]
+
+    # Perform the KS test against the uniform distribution on [0, 1]
+    _, p_value = stats.kstest(rank_aligned, 'uniform')
+
+    return p_value
+
+
 def prnu_similarity_profil(prnu, residual, crop_size):
     sample_size = len(prnu)
     signal_size = len(residual)
@@ -357,8 +388,9 @@ def prnu_similarity_profil(prnu, residual, crop_size):
 
     # Kolmogorov-Smirnov similarity test
     ks_pvalue = stats.ks_2samp(list_corr, list_corr_i_j, alternative='greater')[1]
+    rank_pvalue = ks_rank_test(list_corr, list_corr_i_j)
 
-    return ks_pvalue, list_corr, list_corr_i_j
+    return ks_pvalue, rank_pvalue, list_corr, list_corr_i_j
 
 
 def align_and_crop(sig1, sig2, normalize=True, use_fft=True, return_corr=False):
@@ -441,6 +473,57 @@ def align_and_crop(sig1, sig2, normalize=True, use_fft=True, return_corr=False):
         result['corr'] = corr
         result['lags'] = lags
     return result
+
+
+def save_histo_gauss(list_missaligned, list_aligned, pvalue):
+    # Set up number of bins
+    num_bin = 50
+    bin_lims = np.linspace(-1, 1, num_bin + 1)
+    bin_centers = 0.5 * (bin_lims[:-1] + bin_lims[1:])
+    bin_widths = bin_lims[1:] - bin_lims[:-1]
+
+    # Computing histograms
+    hist1, _ = np.histogram(list_missaligned, bins=bin_lims)
+    hist2, _ = np.histogram(list_aligned, bins=bin_lims)
+
+    # Normalizing
+    hist1b = hist1 / np.max(hist1)
+    hist2b = hist2 / np.max(hist2)
+
+    # Plot
+    plt.bar(bin_centers, hist1b, width=bin_widths, align='center', alpha=0.7, edgecolor='black',
+            label=r"$\rho(P^r_i, P^p_j):i \neq j$")
+    plt.bar(bin_centers, hist2b, width=bin_widths, align='center', alpha=0.7, edgecolor='black',
+            label=r"$\rho(P^r_i, P^p_i):i=1,...K$")
+    plt.title(f'p_value = {pvalue:.2e}')
+    plt.legend(loc='upper right')
+    plt.savefig('./outputs/histo.png')
+
+
+def save_histo_rank(list_missaligned, list_aligned, pvalue):
+    aligned = np.ones(len(list_aligned))
+    misaligned = np.zeros(len(list_missaligned))
+
+    all_values = np.concatenate((list_missaligned, list_aligned))
+    index_aligned = np.concatenate((misaligned, aligned))
+    rank_corr = rank_1d(all_values)
+
+    rank_aligned = rank_corr[np.where(index_aligned)]
+    # rank_misaligned = rank_corr[np.where(index_aligned == 0)]
+
+    # Define histogram parameters
+    num_bins = 50
+    bin_edges = np.linspace(0, max(rank_aligned), num_bins + 1)
+    bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+    bin_widths = bin_edges[1:] - bin_edges[:-1]
+
+    # Compute histograms
+    hist1, _ = np.histogram(rank_aligned, bins=bin_edges)
+
+    plt.bar(bin_centers, hist1, width=bin_widths, align='center', alpha=0.7, edgecolor='black',
+            label=r"$\rho(P^r_i, P^p_j): i = j$")
+    plt.legend(loc='best')
+    plt.savefig('./outputs/histo_rank.png')
 
 
 def get_sensor_id(path):
