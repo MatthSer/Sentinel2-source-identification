@@ -24,12 +24,17 @@ def main(reference, test, crop_size, filter, crop=False):
         results = align_and_crop(s1, s2, normalize=True, use_fft=True, return_corr=False)
         s1_crop = results['s1_crop']
         s2_crop = results['s2_crop']
+        idx1 = results['idx1']
+        idx2 = results['idx2']
         offset = results['lag']
         p_value_gauss, p_value_rank, list_corr, list_corr_ij = prnu_similarity_profil(s1_crop, s2_crop, crop_size)
 
     print(f'p_value Gauss test: {p_value_gauss}')
     print(f'p_value Rank test: {p_value_rank}')
-    print(f'best offset: {offset}')
+    print(f'Start s1: {idx1[0]}')
+    print(f'Start s2: {idx2[0]}')
+    print(f'Diff start: {abs(idx1[0] - idx2[0])}')
+    print(f'best offset: {abs(offset)}')
 
     if p_value_gauss < 1e-6:
         print(f'Images come from the same source')
@@ -54,6 +59,7 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--crop_size", type=int, default=20, required=False)
     parser.add_argument("-f", "--filter", type=str, default='rank', required=False)
     parser.add_argument("-c", "--crop", type=bool, default=False, required=False)
+    parser.add_argument("-cs", "--crop_size", type=int, default=1000, required=False)
 
     args = parser.parse_args()
     main(args.reference, args.test, args.crop_size, args.filter)
