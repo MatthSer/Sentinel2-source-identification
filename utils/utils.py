@@ -255,7 +255,7 @@ def get_profil_crop(img, size_x, size_y):
     return profil, x_start
 
 
-def get_profil(path, filter, crop_size=1000):
+def get_profil(path, filter, crop=False, crop_size=None):
     """
     Reads an image file, applies filtering, and extracts a profile.
 
@@ -275,7 +275,7 @@ def get_profil(path, filter, crop_size=1000):
             if img is None or img.size == 0:
                 raise ValueError(f"Empty or corrupted image: {path}")
 
-            if crop_size:
+            if crop:
                 img, x_start, y_start = random_square_crop(img, crop_size)
             else:
                 x_start, y_start = 0, 0
